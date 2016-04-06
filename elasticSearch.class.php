@@ -10,9 +10,9 @@ class ElasticSearch {
   }
 
   function call($path, $http = array("method"=>'PUT', "content"=>'')) {
-    if (!isset($http["content"])) $http["content"] = '';
+    if (!isset($http["content"])) $http["content"] = "";
     if (!$this->index) throw new Exception('$this->index needs a value');  
-    $query = 'curl -X'.$http["method"].' "'.$this->server.'/'.$this->index.'/'.$path.'" -d "'.$http["content"].'"'; 
+    $query = 'curl -X'.$http["method"].' "'.$this->server.'/'.$this->index.'/'.$path.'" -d "'.str_replace('"', '\"', str_replace(array("\n","\r"), '', $http["content"])).'"';
     //echo($query);
     return exec($query);
     //echo 'done '.PHP_EOL;
@@ -51,8 +51,9 @@ class ElasticSearch {
     return $this->call($type . '/_mapping', array('method' => 'PUT', 'content' => $data));
   }
 
-  function settings($data){
-    return $this->call('/_settings', array('method' => 'PUT', 'content' => $data));
+  function settings($data = '') {
+    $data = '{"settings": {"analysis": {"filter": {"russian_stop": {"type":"stop","stopwords":  "_russian_" },"russian_stemmer": {"type":"stemmer","language":"russian"}},"analyzer": {"russian": {"tokenizer":  "standard","filter": ["lowercase","russian_stop","russian_stemmer"]}}}}}';
+    return $this->call('_settings', array('method' => 'PUT', 'content' => $data));
   }
 
   //curl -X PUT http://localhost:9200/{INDEX}/{TYPE}/{ID} -d ...
@@ -66,7 +67,7 @@ class ElasticSearch {
   }
 
   //curl -X GET http://localhost:9200/{INDEX}/{TYPE}/_search?q= ...
-  function query($type, $q){
-    return $this->call($type . '/_search?' . http_build_query(array('q' => $q)), array('method' => 'GET'));
+  function query($type, $q, $data = ''){
+    return $this->call($type . '/_search?' . http_build_query(array('q' => $q)), array('method' => 'GET', 'content' => $data));
   }
 }
