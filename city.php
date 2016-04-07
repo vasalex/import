@@ -1,11 +1,12 @@
 <?php
+	$start = microtime(true);
 	require 'config.class.php';
 	require 'elasticSearch.class.php';
 	$e = new ElasticSearch;
 	$e->index = 'meteonova'; // name of the index
 	$e->create(); // create the index
-	$type = 'regions'; // name of the data items
-	$data_structure = '{"regions": {
+	$type = 'cities'; // name of the data items
+	$data_structure = '{"'.$type.'": {
 						"properties": {
 							"id":{"type":"string"},
 							"name": {"type":"string","fields":{"raw":{"type":"string","index":"not_analyzed"}}},							
@@ -14,6 +15,8 @@
 								"name_en":{"type":"string","fields":{"raw":{"type":"string","index":"not_analyzed"}}},
 								"name_ua":{"type":"string","fields":{"raw":{"type":"string","index":"not_analyzed"}}}
 							}},
+							"location": {"type": "geo_point"}, 
+							"population":{"type":"string"},																												
 							"country": {
 								"properties": {
 									"id":{"type":"string"},
@@ -24,8 +27,19 @@
 										"name_ua":{"type":"string"}
 									}}										
 								}
-							},							
-							"capital": {
+							},
+							"region": {
+								"properties": {
+									"id":{"type":"string"},
+									"name":{"type":"string"},
+									"names":{"properties":{
+										"name_ru":{"type":"string"},
+										"name_en":{"type":"string"},
+										"name_ua":{"type":"string"}
+									}}										
+								}
+							},														
+							"municipal": {
 								"properties": {
 									"id":{"type":"string"},
 									"name":{"type":"string"},
@@ -58,40 +72,56 @@
 	    echo $e->getMessage();
 	    die;
 	}    		
-	$sql = 'SELECT regions.*, countries.*, Town.name_en as cityname_en, Town.name_ru as cityname_ru, Town.name_ua as cityname_ua FROM (regions INNER JOIN countries ON regions.nCountry = countries.cIndex) INNER JOIN Town ON regions.capital_s = Town.index;';
+	$sql = 'SELECT City.*, municipal.RU as municipalname_ru, municipal.EN as municipalname_en, municipal.UA as municipalname_ua, Town.name_ru as cityname_ru, Town.name_en as cityname_en, Town.name_ua as cityname_ua, regions.RU as regionname_ru, regions.EN as regionname_en, regions.UA as regionname_ua, countries.name_ru, countries.name_en, countries.name_ua
+FROM (((City INNER JOIN Town ON City.index = Town.index) INNER JOIN countries ON City.nCountry = countries.cIndex) LEFT JOIN regions ON City.state = regions.state) LEFT JOIN municipal ON City.nMun = municipal.nMun';
 	$sth = $db->query($sql);
+	$i = 0;
 	$j = 0;
 	$k = 0;
 	while ($row = $sth->fetch()) {	
 		// пытаемся добавить запись в индекс
 		$pushString = '{
-			"id":"'.$row['state'].'",
-			"name": "'.$row['EN'].'",
+			"id":"'.$row['index'].'",
+			"name": "'.$row['cityname_en'].'",
 			"names": {
-				"name_ru":"'.$row['RU'].'", 
-				"name_en": "'.$row['EN'].'", 
-				"name_ua":"'.$row['UA'].'"
+				"name_ru":"'.$row['cityname_ru'].'", 
+				"name_en": "'.$row['cityname_en'].'", 
+				"name_ua":"'.$row['cityname_ua'].'"
 			}, 
+			"location": {
+				"lat":'.(isset($row['lat'])?$row['lat']:($row['fi']/10)).',
+				"lon":'.(isset($row['lng'])?$row['lng']:($row['la']/10)).'								
+			}, 
+			"population":"'.$row['population'].'",				
 			"country": {
-				"id":"'.$row['cIndex'].'",
+				"id":"'.$row['nCountry'].'",
 				"name": "'.$row['name_en'].'",
 				"names": {
 					"name_ru":"'.$row['name_ru'].'", 
 					"name_en": "'.$row['name_en'].'", 
 					"name_ua":"'.$row['name_ua'].'"
 				}				 	
-			},			
-			"capital": {
-				"id":"'.$row['capital_s'].'",
-				"name": "'.$row['cityname_en'].'",
+			},
+			"region": {
+				"id":"'.$row['state'].'",
+				"name": "'.$row['regionname_en'].'",
 				"names": {
-					"name_ru":"'.$row['cityname_ru'].'", 
-					"name_en": "'.$row['cityname_en'].'", 
-					"name_ua":"'.$row['cityname_ua'].'"
+					"name_ru":"'.$row['regionname_ru'].'", 
+					"name_en": "'.$row['regionname_en'].'", 
+					"name_ua":"'.$row['regionname_ua'].'"
+				}				 	
+			},						
+			"municipal": {
+				"id":"'.$row['nMun'].'",
+				"name": "'.$row['municipalname_en'].'",
+				"names": {
+					"name_ru":"'.$row['municipalname_ru'].'", 
+					"name_en": "'.$row['municipalname_en'].'", 
+					"name_ua":"'.$row['municipalname_ua'].'"
 				}				 	
 			}
 		}';			
-		$result = json_decode($e->add($type, $row['state'], $pushString));
+		$result = json_decode($e->add($type, $row['index'], $pushString));
 		if (isset($result->error)) {
 			print "\t".json_encode($result->error)."\n";
 			continue;
@@ -100,14 +130,15 @@
 			$j++;
 		}
 		else { // если есть в индексе, то пытаемся обновить
-			$result = json_decode($e->update($type, $row['state'], '{"doc": '.$pushString.'}'));
+			$result = json_decode($e->update($type, $row['index'], '{"doc": '.$pushString.'}'));
 			if (!isset($result->error) && $result != NULL) { // проверяем удалось ли обновить запись в индексе
 				$k++;	
 			}
-		}  	
+		} 
+		//if ($i == 0) break; 	
 	}
 	// выводим сколько добавлено записей, сколько обновлено
-	print ("\t".$j." regions was added\n");
-	print ("\t".$k." regions was updated\n");
-	
+	print ("\t".$j." ".$type." was added\n");
+	print ("\t".$k." ".$type." was updated\n");
+	echo "Время выполнения импорта: ".(microtime(true) - $start);
 ?>

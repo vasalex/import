@@ -70,4 +70,8 @@ class ElasticSearch {
   function query($type, $q, $data = ''){
     return $this->call($type . '/_search?' . http_build_query(array('q' => $q)), array('method' => 'GET', 'content' => $data));
   }
+
+  function query2($type, $data = ''){
+    return $this->call($type . '/_search', array('method' => 'GET', 'content' => $data));
+  }  
 }
