@@ -5,7 +5,7 @@
 	$e->index = 'meteonova'; // name of the index
 	$e->create(); // create the index
 	$type = 'countries'; // name of the data items
-	$data_structure = '{"countries": {
+	$data_structure = '{"'.$type.'": {
 						"properties": {
 							"id":{"type":"string"},
 							"names":{"properties":{

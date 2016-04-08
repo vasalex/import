@@ -15,7 +15,11 @@
 								"name_en":{"type":"string","fields":{"raw":{"type":"string","index":"not_analyzed"}}},
 								"name_ua":{"type":"string","fields":{"raw":{"type":"string","index":"not_analyzed"}}}
 							}},
-							"location": {"type": "geo_point"}, 
+							"pin" : {
+								"properties": {
+									"location": {"type": "geo_point"}
+								}
+							}, 
 							"population":{"type":"string"},																												
 							"country": {
 								"properties": {
@@ -80,6 +84,15 @@ FROM (((City INNER JOIN Town ON City.index = Town.index) INNER JOIN countries ON
 	$k = 0;
 	while ($row = $sth->fetch()) {	
 		// пытаемся добавить запись в индекс
+		$la = 0;
+		if (isset($row['la'])) {
+			$la = $row['la']/10;
+	        while ($la > 180)
+	        	$la = $la-360;
+	        while ($la < -180) 
+	        	$la = $la+360;
+	    }
+
 		$pushString = '{
 			"id":"'.$row['index'].'",
 			"name": "'.$row['cityname_en'].'",
@@ -87,10 +100,12 @@ FROM (((City INNER JOIN Town ON City.index = Town.index) INNER JOIN countries ON
 				"name_ru":"'.$row['cityname_ru'].'", 
 				"name_en": "'.$row['cityname_en'].'", 
 				"name_ua":"'.$row['cityname_ua'].'"
-			}, 
-			"location": {
-				"lat":'.(isset($row['lat'])?$row['lat']:($row['fi']/10)).',
-				"lon":'.(isset($row['lng'])?$row['lng']:($row['la']/10)).'								
+			},
+			"pin": { 
+				"location": {
+					"lat":'.(isset($row['lat'])?$row['lat']:($row['fi']/10)).',
+					"lon":'.(isset($row['lng'])?$row['lng']:$la).'								
+				}
 			}, 
 			"population":"'.$row['population'].'",				
 			"country": {
@@ -135,7 +150,8 @@ FROM (((City INNER JOIN Town ON City.index = Town.index) INNER JOIN countries ON
 				$k++;	
 			}
 		} 
-		//if ($i == 0) break; 	
+		$i++;
+		//if ($i == 200) break; 	
 	}
 	// выводим сколько добавлено записей, сколько обновлено
 	print ("\t".$j." ".$type." was added\n");
